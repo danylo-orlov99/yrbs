@@ -31,7 +31,7 @@ options(digits=3)
 ```
 
 ```{r, warning=F}
-yrbs=read.dta13("~/Grad School/Fall 2023/Epi Research 1/yrbs2021.dta")
+yrbs=read.dta13("~/Documents/yrbs/yrbs2021.dta")
 ```
 
 # Bivariate analysis
