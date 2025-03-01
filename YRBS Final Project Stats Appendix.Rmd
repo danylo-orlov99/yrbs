@@ -1,0 +1,181 @@
+---
+title: "YRBS Statistical Appendix"
+author: "Danylo Orlov"
+date: "`r format(Sys.Date())`"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    theme: readable
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+    code_download: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r set-up, echo=T, message=F, warning=F}
+library(mosaic)
+library(readstata13)
+library(arm)
+library(table1)
+#library(tab)
+library(faraway)
+options(digits=3)
+```
+
+```{r, warning=F}
+yrbs=read.dta13("~/Grad School/Fall 2023/Epi Research 1/yrbs2021.dta")
+```
+
+# Bivariate analysis
+
+## Outcome
+
+Outcome: Past-Month Frequency of Poor Mental Health (Q85):
+
+```{r}
+yrbs$Poor.Mental.Health.Often=factor(yrbs$QN85==1, levels=c(T, F), labels=c("Frequent Poor Mental Health in Past Month", "Infrequent Poor Mental Health in Past Month"))
+label(yrbs$Poor.Mental.Health.Often)="Frequency of Poor Mental Health in Past Month"
+tally(Q85 ~ Poor.Mental.Health.Often , data=yrbs)
+tally(~ Poor.Mental.Health.Often , format = "percent", data=yrbs, useNA="no")
+```
+
+## Predictor
+
+Predictor: Past-Month Cigarette Smoking (Q32):
+
+```{r}
+yrbs$Cigarette.Smoking = factor(yrbs$QN32==1, levels=c(T, F), labels=c("Smoked Cigarettes in Past Month", "Didn't Smoke Cigarettes in Past Month"))
+label(yrbs$Cigarette.Smoking)="Any Cigarette Smoking in Past Month"
+tally(Q32 ~ Cigarette.Smoking , data=yrbs)
+tally(~ Cigarette.Smoking , format = "percent", data=yrbs, useNA="no")
+```
+
+## Covariates
+
+Control variables:  age (Q1), sex (Q2), electronic vaping (Q35), alcohol use (Q41), marijuana use (Q47).
+
+Age:
+
+```{r}
+yrbs$Age = as.numeric(yrbs$Q1)+11
+label(yrbs$Age)="Age in years"
+tally(Q1~Age, data=yrbs)
+favstats(yrbs$Age)
+```
+Sex:
+
+```{r}
+yrbs$Sex= factor(yrbs$Q2=="Female", levels=c(T, F), labels=c("Female", "Male"))
+label(yrbs$Sex)="Sex"
+tally(Q2~Sex, data=yrbs)
+tally(~ Sex , format = "percent", data=yrbs, useNA="no")
+```
+
+Past month electronic vaping:
+
+```{r}
+yrbs$Vaping = factor(yrbs$QN35==1, levels=c(T, F), labels=c("Vaped in Past Month", "Didn't Vape in Past Month"))
+label(yrbs$Vaping)="Any Electronic Vapor Use in Past Month"
+tally(Q35 ~ Vaping , data=yrbs)
+```
+Past month alcohol use:
+
+```{r}
+yrbs$Alcohol.Drinking = factor(yrbs$QN41==1, levels=c(T, F), labels=c("Drank Alcohol in Past Month", "Didn't Drink Alcohol in Past Month"))
+label(yrbs$Alcohol.Drinking)="Any Alcohol Consumption in Past Month"
+tally(Q41 ~ Alcohol.Drinking , data=yrbs)
+```
+Past month marijuana use:
+
+```{r}
+yrbs$Marijuana.Use = factor(yrbs$QN47==1, levels=c(T, F), labels=c("Used Marijuana in Past Month", "Didn't Use Marijuana in Past Month"))
+label(yrbs$Marijuana.Use)="Any Marijuana Consumption in Past Month"
+tally(Q47 ~ Marijuana.Use , data=yrbs)
+```
+
+## Survey Weighted Association
+
+```{r}
+library(survey)
+yrbsdes <- svydesign(id=~PSU, weight=~WEIGHT, strata=~STRATUM,data=yrbs, nest=T)
+```
+
+```{r}
+svyby(~Poor.Mental.Health.Often, ~Cigarette.Smoking, design=yrbsdes, svymean, na.rm=T)
+```
+
+```{r}
+svychisq(~Poor.Mental.Health.Often + Cigarette.Smoking, design=yrbsdes)
+```
+
+Among adolescents who have smoked in the past month, 46.5% have had frequent poor mental health; among adolescents who have not smoked in the past month, 28.3% have had frequent poor mental health, which is significantly lower (p<0.001).
+
+# Table 1
+
+```{r}
+#tabmulti.svy(Poor.Mental.Health.Often + Age + Sex + Vaping + Alcohol.Drinking + Marijuana.Use ~ Cigarette.Smoking , design = yrbsdes) 
+```
+
+# Survey Weighted Poisson Regression
+
+Releveling the variables for our analysis:
+
+```{r}
+yrbs$Cigarette.Smoking <- relevel(yrbs$Cigarette.Smoking, ref = "Didn't Smoke Cigarettes in Past Month")
+yrbs$Poor.Mental.Health.Often <- relevel(yrbs$Poor.Mental.Health.Often, ref = "Infrequent Poor Mental Health in Past Month")
+yrbs$Alcohol.Drinking <- relevel(yrbs$Alcohol.Drinking, ref = "Didn't Drink Alcohol in Past Month")
+yrbs$Marijuana.Use <- relevel(yrbs$Marijuana.Use, ref = "Didn't Use Marijuana in Past Month")
+yrbs$Vaping <- relevel(yrbs$Vaping, ref = "Didn't Vape in Past Month")
+
+```
+
+```{r}
+library(survey)
+yrbsdes <- svydesign(id=~PSU, weight=~WEIGHT, strata=~STRATUM,data=yrbs, nest=T)
+
+model=svyglm(as.numeric(Poor.Mental.Health.Often) ~ Cigarette.Smoking + Age + Sex + Alcohol.Drinking + Vaping + Marijuana.Use, family = poisson, design = yrbsdes)
+summary(model)
+cbind(exp(coef(model)), exp(confint(model)))
+```
+
+Cigarette smoking in past month was associated with 7% higher prevalence of frequent poor mental health (APR = 1.07, 95% CI (1.01, 1.13)), adjusting for age, sex, and past-month alcohol, marijuana, and vaping product use. Adolescents who consumed alcohol or marijuana in the past month were more likely to experience frequent poor mental health than those who did not consume these substances, while male adolescents were less likely to experience frequent poor mental health than female adolescents. Age and usage of vaping products did not seem to impact the likelihood of frequent poor mental health. 
+
+## Effect Modification by Sex:
+
+```{r}
+library(survey)
+yrbsdes <- svydesign(id=~PSU, weight=~WEIGHT, strata=~STRATUM,data=yrbs, nest=T)
+
+model4=svyglm(as.numeric(Poor.Mental.Health.Often) ~ Cigarette.Smoking + Age + Sex + Alcohol.Drinking + Vaping + Marijuana.Use + Cigarette.Smoking*Sex, family = poisson, design = yrbsdes)
+summary(model4)
+cbind(exp(coef(model4)), exp(confint(model4)))
+```
+
+No effect modification by sex.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
